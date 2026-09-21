@@ -1378,11 +1378,11 @@
       const startRow = rowNum;
       grouped[cat].forEach((r) => {
         if (extra.hasItemMaster) {
-          ws.getCell(rowNum, 1).value = { formula: `VLOOKUP(D${rowNum},'${extra.itemMasterSheetName}'!$A:$C,2,0)` };
-          ws.getCell(rowNum, 2).value = { formula: `VLOOKUP(D${rowNum},'${extra.itemMasterSheetName}'!$A:$C,3,0)` };
+          ws.getCell(rowNum, 1).value = { formula: `VLOOKUP(D${rowNum}&"",'${extra.itemMasterSheetName}'!$A:$C,2,0)` };
+          ws.getCell(rowNum, 2).value = { formula: `VLOOKUP(D${rowNum}&"",'${extra.itemMasterSheetName}'!$A:$C,3,0)` };
         }
         // Category (col C) intentionally left blank — filled in by hand.
-        ws.getCell(rowNum, 4).value = r.code;
+        ws.getCell(rowNum, 4).value = String(r.code);
         ws.getCell(rowNum, 5).value = r.desc;
         ws.getCell(rowNum, 6).value = r.qty;
         ws.getCell(rowNum, 7).value = r.uom || "NOS";
@@ -1395,8 +1395,8 @@
       });
       const endRow = rowNum - 1;
       if (extra.hasItemMaster) {
-        ws.getCell(rowNum, 1).value = { formula: `VLOOKUP(D${rowNum},'${extra.itemMasterSheetName}'!$A:$C,2,0)` };
-        ws.getCell(rowNum, 2).value = { formula: `VLOOKUP(D${rowNum},'${extra.itemMasterSheetName}'!$A:$C,3,0)` };
+        ws.getCell(rowNum, 1).value = { formula: `VLOOKUP(D${rowNum}&"",'${extra.itemMasterSheetName}'!$A:$C,2,0)` };
+        ws.getCell(rowNum, 2).value = { formula: `VLOOKUP(D${rowNum}&"",'${extra.itemMasterSheetName}'!$A:$C,3,0)` };
       }
       const subCell = ws.getCell(rowNum, 10);
       subCell.value = { formula: `SUM(J${startRow}:J${endRow})` };
@@ -1538,25 +1538,21 @@
     const wb = new ExcelJS.Workbook();
     const usedNames = new Set();
 
-    // ---- ITEM MASTER: normalized Code / Item Sub Sub Group / ItemSubgroup,
-    // used by real VLOOKUP formulas on every FG detail sheet (blank/subtotal
-    // rows correctly show #N/A, same as the team's real sheets). The built-in
-    // list has ~35k items company-wide — only the codes actually appearing
-    // in this run's FG tabs are embedded, so the download stays small. ----
+    // ---- ITEM MASTER: full Code / Item Sub Sub Group / ItemSubgroup list
+    // (~35k items company-wide), embedded in full every run — no filtering,
+    // so a VLOOKUP can never miss a code just because it wasn't guessed as
+    // "relevant". Codes are written as text; the VLOOKUP formulas coerce
+    // their lookup value to text too (D5&"") so a numeric-looking item code
+    // in the BOM dump still matches — Excel does NOT match a number against
+    // a text cell by default, which is what caused #N/A across the board. ----
     let itemMasterSheetName = null;
     if (itemMasterRows && itemMasterRows.length) {
-      const usedCodes = new Set();
-      Array.from(fgSheetsBuilt.values()).forEach((built) => {
-        built.result.lineRows.forEach((ln) => usedCodes.add(String(ln.code).trim().toLowerCase()));
-      });
-      const relevantRows = itemMasterRows.filter((r) => usedCodes.has(String(r.code).trim().toLowerCase()));
-      if (relevantRows.length) {
-        const imAoa = [["Code", "Item Sub Sub Group", "ItemSubgroup"]].concat(
-          relevantRows.map((r) => [r.code, r.subSubGroup, r.subGroup])
-        );
-        const imWs = addAoaSheet(wb, usedNames, "ITEM MASTER", imAoa, { boldHeader: true, colWidths: [16, 20, 16] });
-        itemMasterSheetName = imWs.name;
-      }
+      const imAoa = [["Code", "Item Sub Sub Group", "ItemSubgroup"]].concat(
+        itemMasterRows.map((r) => [String(r.code), r.subSubGroup, r.subGroup])
+      );
+      const imWs = addAoaSheet(wb, usedNames, "ITEM MASTER", imAoa, { boldHeader: true, colWidths: [16, 20, 16] });
+      imWs.getColumn(1).numFmt = "@"; // force text format so numeric-looking codes aren't reinterpreted as numbers
+      itemMasterSheetName = imWs.name;
     }
 
     // ---- Final Summary (mirrors the team's real sheet + live formulas) ----
