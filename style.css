@@ -246,7 +246,7 @@ tbody tr:hover{background:var(--surface-2);}
 .wpanel{display:none;}
 .wpanel.active{display:block;animation:fadein .2s ease;}
 
-.dropzone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.dropzone-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
 .dropzone{
   border:1.5px dashed var(--border);border-radius:var(--radius);padding:20px 16px;text-align:center;
   background:var(--surface);cursor:pointer;transition:.15s;position:relative;
@@ -254,6 +254,12 @@ tbody tr:hover{background:var(--surface-2);}
 .dropzone:hover{border-color:var(--accent);background:var(--accent-soft);}
 .dropzone.filled{border-style:solid;border-color:var(--success);background:var(--success-bg);}
 .dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.dz-tag{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:600;vertical-align:middle;background:var(--surface-2);color:var(--text-muted);}
+.dz-tag.req{background:var(--danger-bg);color:var(--danger);}
+.dropzone.filled .dz-tag.req{background:var(--success-bg);color:var(--success);}
+.wizard-error{background:var(--danger-bg);border:1px solid color-mix(in srgb, var(--danger) 35%, transparent);color:var(--danger);padding:12px 16px;border-radius:var(--radius-sm);font-size:12.5px;margin:14px 0;}
+.wizard-error strong{color:var(--text);}
+.wizard-error ul{margin:6px 0 0 18px;padding:0;}
 .dz-icon{
   width:38px;height:38px;border-radius:10px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;
   margin:0 auto 10px;color:var(--accent);
