@@ -289,12 +289,13 @@
   /* ---------------------------------------------------------------
    * New Run wizard — Step 1: file dropzones
    * ------------------------------------------------------------- */
+  // Only the BOM is required: the engine has a fallback for each of the
+  // others (see runEngine). The Input Sheet is the Step 2 form, not an upload.
   const FILES = [
-    { key: "bom", title: "SAP BOM Dump", sub: "One tab per FG + sub-assembly" },
-    { key: "price", title: "Price List", sub: "GRPORate / PriceListRate" },
-    { key: "bpcat", title: "BP Catalogue", sub: "12NC mapping" },
-    { key: "fgprice", title: "FG Price List", sub: "Current system FG price" },
-    { key: "input", title: "Input Sheet", sub: "Commodity rates & rules" },
+    { key: "bom", title: "SAP BOM Dump", sub: "One tab per FG + sub-assembly", required: true },
+    { key: "price", title: "Price List", sub: "GRPORate / PriceListRate — without it, the BOM's own Unit Price is used" },
+    { key: "bpcat", title: "BP Catalogue", sub: "12NC mapping — without it, 12NC / Description stay blank" },
+    { key: "fgprice", title: "FG Price List", sub: "Current system FG price — without it, PO Price stays blank" },
   ];
   const uploaded = {};
   const dzIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
@@ -304,7 +305,7 @@
     (f) => `<label class="dropzone" id="dz-${f.key}">
       <input type="file" accept=".xlsx,.xls" data-key="${f.key}">
       <div class="dz-icon">${dzIcon}</div>
-      <div class="dz-title">${f.title}</div>
+      <div class="dz-title">${f.title} <span class="dz-tag${f.required ? " req" : ""}">${f.required ? "Required" : "Optional"}</span></div>
       <div class="dz-sub">${f.sub}</div>
       <div class="dz-file" id="dzfile-${f.key}"></div>
     </label>`
@@ -335,6 +336,7 @@
           document.getElementById("dz-" + key).classList.add("filled");
           const kb = (file.size / 1024).toFixed(0);
           dzFileEl.textContent = `✓ ${file.name} (${kb} KB, ${wb.SheetNames.length} tab${wb.SheetNames.length === 1 ? "" : "s"})`;
+          refreshWizardError();
         } catch (err) {
           dzFileEl.textContent = `✗ Could not parse ${file.name} — is it a valid .xlsx?`;
           document.getElementById("dz-" + key).classList.remove("filled");
@@ -410,6 +412,7 @@
       }
     }
     sapB1FetchBtn.disabled = false;
+    refreshWizardError();
     sapB1Status.textContent = results.every(Boolean)
       ? "All 4 files fetched from SAP B1 — Input Sheet (Step 2) still needs your manual entry."
       : "Some fetches failed — check the backend is running and reachable, then retry.";
@@ -418,7 +421,61 @@
   /* ---------------------------------------------------------------
    * Wizard step nav
    * ------------------------------------------------------------- */
+  // What still stops step `n` from being complete. Empty array = step is OK.
+  function stepIssues(n) {
+    if (n === 1) {
+      return FILES.filter((f) => f.required && !uploaded[f.key]).map(
+        (f) => `Upload the ${f.title} (Step 1) — the costing is built from it.`
+      );
+    }
+    if (n === 2) {
+      const rows = readRows(wattBody, ["fg", "watt"]);
+      const withFg = rows.filter((r) => r.fg.trim());
+      if (!withFg.length) return ["Add at least one FG code in Section B (Step 2)."];
+      const noWatt = withFg.filter((r) => !(Number(r.watt) > 0)).map((r) => r.fg.trim());
+      return noWatt.length ? [`Enter a wattage in Section B (Step 2) for: ${noWatt.join(", ")}.`] : [];
+    }
+    return [];
+  }
+  // First step before `upTo` that still has issues, or null if all are OK.
+  function firstBlockedStep(upTo) {
+    for (let n = 1; n < upTo; n++) if (stepIssues(n).length) return n;
+    return null;
+  }
+  let currentStep = 1;
+  let wizardErrorShown = false;
+  function showWizardError(issues) {
+    wizardErrorShown = issues.length > 0;
+    document.querySelectorAll(".wizard-error").forEach((el) => {
+      el.style.display = issues.length ? "block" : "none";
+      el.innerHTML = issues.length
+        ? `<strong>Before you continue:</strong><ul>${issues.map((i) => `<li>${i}</li>`).join("")}</ul>`
+        : "";
+    });
+  }
+  // Once a message is showing, keep it in sync as the user fixes things.
+  function refreshWizardError() {
+    if (!wizardErrorShown) return;
+    const upTo = currentStep === 3 ? 3 : currentStep + 1;
+    const issues = [];
+    for (let n = 1; n < upTo; n++) issues.push(...stepIssues(n));
+    showWizardError(issues);
+  }
+
   function goStep(n) {
+    // Going back is always allowed; going forward needs the earlier steps done.
+    if (n > currentStep) {
+      const blocked = firstBlockedStep(n);
+      if (blocked !== null) {
+        if (blocked !== currentStep) goStep(blocked);
+        // Section B is collapsed by default — open it so the fix is in view.
+        if (blocked === 2) document.querySelector('[data-acc="B"]').classList.add("open");
+        showWizardError(stepIssues(blocked));
+        return;
+      }
+    }
+    currentStep = n;
+    showWizardError([]);
     document.querySelectorAll(".wstep").forEach((s) => {
       const sn = Number(s.dataset.step);
       s.classList.toggle("active", sn === n);
@@ -625,6 +682,8 @@
     );
   }
   document.getElementById("addWattRow").addEventListener("click", () => addWattRow());
+  wattBody.addEventListener("input", () => refreshWizardError());
+  wattBody.addEventListener("click", (e) => { if (e.target.closest(".row-del")) refreshWizardError(); });
   addWattRow("BY080", 80, 1108.37);
   addWattRow("BY220P", 220, 2271.13);
   addWattRow("30302118", 150, 0);
@@ -663,11 +722,12 @@
   }
 
   function buildReview() {
-    const filesOk = FILES.filter((f) => uploaded[f.key]).length;
+    const missingOptional = FILES.filter((f) => !f.required && !uploaded[f.key]).map((f) => f.title);
     const watts = readRows(wattBody, ["fg", "watt"]).filter((r) => r.fg);
     const profitPct = val("profitPct");
     const rows = [
-      ["Files uploaded", `${filesOk} / ${FILES.length}`],
+      ["Files uploaded", FILES.filter((f) => uploaded[f.key]).map((f) => f.title).join(", ") || "—"],
+      ["Optional files not uploaded", missingOptional.join(", ") || "None"],
       ["FGs to cost", watts.map((w) => w.fg).join(", ") || "—"],
       ["Profit %", profitPct + "%"],
       ["Driver potted / non-potted", `${val("pottedPct")}% / ${val("nonPottedPct")}%`],
@@ -1775,6 +1835,11 @@
   });
 
   runBtn.addEventListener("click", () => {
+    const blocked = firstBlockedStep(3);
+    if (blocked !== null) {
+      showWizardError([...stepIssues(1), ...stepIssues(2)]);
+      return;
+    }
     runBtn.disabled = true;
     progressTrack.style.display = "block";
     runLog.style.display = "block";

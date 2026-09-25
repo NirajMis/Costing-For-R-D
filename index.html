@@ -204,8 +204,8 @@
         <div class="wpanel active" id="wpanel-1">
           <div class="card">
             <div class="card-head">
-              <h3>Required Files</h3>
-              <span class="muted">.xlsx — header row detected automatically in first 7 rows</span>
+              <h3>Files</h3>
+              <span class="muted">.xlsx — only the SAP BOM Dump is required; header row detected automatically in first 7 rows</span>
             </div>
             <div class="dropzone-grid" id="dropzoneGrid">
               <!-- filled by JS -->
@@ -229,6 +229,7 @@
             <div class="empty-note" id="sapB1Status" style="margin-top:10px;">Fills the 4 dropzones above automatically — Input Sheet still stays a manual form (Step 2). Needs the <code>backend/</code> server running (see backend/README.md).</div>
           </div>
 
+          <div class="wizard-error" role="alert" style="display:none;"></div>
           <div class="wizard-nav">
             <span></span>
             <button class="btn primary" id="toStep2">Next: Input Sheet →</button>
@@ -238,6 +239,7 @@
         <!-- STEP 2 -->
         <div class="wpanel" id="wpanel-2">
           <div id="accordionRoot"></div>
+          <div class="wizard-error" role="alert" style="display:none;"></div>
           <div class="wizard-nav">
             <button class="btn" id="toStep1">← Back</button>
             <button class="btn primary" id="toStep3">Next: Review →</button>
@@ -267,6 +269,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Run Costing Engine
             </button>
+            <div class="wizard-error" role="alert" style="display:none;"></div>
             <div class="progress-track" id="progressTrack" style="display:none;"><div class="progress-fill" id="progressFill"></div></div>
             <div class="run-log" id="runLog" style="display:none;"></div>
           </div>
