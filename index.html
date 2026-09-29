@@ -224,9 +224,15 @@
                   <input type="text" id="sapB1BackendUrl" placeholder="http://localhost:4000">
                 </div>
               </div>
+              <div class="field">
+                <label>FG codes to fetch</label>
+                <div class="field-input">
+                  <input type="text" id="sapB1FgCodes" placeholder="Blank = the FG codes in Step 2, Section B">
+                </div>
+              </div>
             </div>
             <button class="btn" id="sapB1FetchBtn">⚡ Fetch BOM / Price List / BP Catalogue / FG Price List</button>
-            <div class="empty-note" id="sapB1Status" style="margin-top:10px;">Fills the 4 dropzones above automatically — Input Sheet still stays a manual form (Step 2). Needs the <code>backend/</code> server running (see backend/README.md).</div>
+            <div class="empty-note" id="sapB1Status" style="margin-top:10px;">Fills the 4 dropzones above with each FG's BOM (every sub-assembly included) and the prices, 12NC and FG price for just those items — Input Sheet still stays a manual form (Step 2). Needs the <code>backend/</code> server running (see backend/README.md).</div>
           </div>
 
           <div class="wizard-nav">

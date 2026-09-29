@@ -10,6 +10,12 @@ function sendXlsx(res, workbook, filename) {
   res.send(buffer);
 }
 
+// ?fgs=CODE1,CODE2 — the FGs being costed. `items` is the older name.
+function requestedFgs(req) {
+  const raw = req.query.fgs || req.query.items;
+  return raw ? String(raw).split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
 // `getClient` is a () => SapB1Client | null — null in mock mode.
 function createDataRoutes({ getClient, config }) {
   const router = express.Router();
@@ -18,56 +24,76 @@ function createDataRoutes({ getClient, config }) {
     res.json({ ok: true, mockMode: config.mockMode });
   });
 
-  router.get("/bom-dump.xlsx", async (req, res, next) => {
+  // Logs in to Service Layer and reports what it connected to — the first
+  // thing to try after filling in .env. Never returns credentials.
+  router.get("/sap/test-connection", async (req, res, next) => {
+    if (config.mockMode) return res.json({ ok: true, mockMode: true, message: "Mock mode — SAP B1 is not contacted." });
     try {
-      const trees = config.mockMode
-        ? mock.bomTrees
-        : await assemble.assembleBomTrees(getClient(), {
-            itemGroupCode: config.fgItemGroupCode,
-            treeCodes: req.query.items ? String(req.query.items).split(",") : undefined,
-          });
-      sendXlsx(res, builders.buildBomDumpWorkbook(trees), "SAP BOM Dump.xlsx");
+      const client = getClient();
+      const info = await client.login();
+      const sample = await client.get("/Items", { $select: "ItemCode", $top: 1 });
+      res.json({
+        ok: true,
+        mockMode: false,
+        companyDB: config.b1.companyDB,
+        serviceLayerVersion: info.version || null,
+        sessionTimeoutMinutes: info.sessionTimeout,
+        itemsReadable: Array.isArray(sample.value),
+      });
     } catch (err) {
       next(err);
     }
   });
 
-  router.get("/price-list.xlsx", async (req, res, next) => {
-    try {
-      const rows = config.mockMode
-        ? mock.priceListRows
-        : await assemble.assemblePriceListRows(getClient(), {
-            priceListId: config.priceListId,
-            lookbackDays: config.grpoLookbackDays,
-            itemCodes: req.query.items ? String(req.query.items).split(",") : undefined,
-          });
-      sendXlsx(res, builders.buildPriceListWorkbook(rows), "Price List.xlsx");
-    } catch (err) {
-      next(err);
-    }
-  });
+  // Each data file: mock rows in mock mode, otherwise built from the
+  // expanded BOM context for the requested FGs.
+  function dataRoute(path, filename, buildMock, buildLive) {
+    router.get(path, async (req, res, next) => {
+      try {
+        if (config.mockMode) return sendXlsx(res, buildMock(), filename);
+        const client = getClient();
+        const ctx = await assemble.getBomContext(client, config, requestedFgs(req));
+        sendXlsx(res, await buildLive(client, ctx), filename);
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
 
-  router.get("/bp-catalogue.xlsx", async (req, res, next) => {
-    try {
-      const { fetchBpCatalogue } = require("../src/sapB1Queries");
-      const rows = config.mockMode ? mock.bpCatalogueRows : await fetchBpCatalogue(getClient());
-      sendXlsx(res, builders.buildBpCatalogueWorkbook(rows), "BP Catalogue.xlsx");
-    } catch (err) {
-      next(err);
+  dataRoute(
+    "/bom-dump.xlsx",
+    "SAP BOM Dump.xlsx",
+    () => builders.buildBomDumpWorkbook(mock.bomTrees),
+    (client, ctx) => {
+      if (!ctx.trees.length) {
+        const err = new Error(`No Bill of Materials found in SAP B1 for: ${ctx.fgCodes.join(", ")}`);
+        err.status = 404;
+        throw err;
+      }
+      return builders.buildBomDumpWorkbook(assemble.assembleBomTrees(ctx));
     }
-  });
+  );
 
-  router.get("/fg-price-list.xlsx", async (req, res, next) => {
-    try {
-      const { fetchFgPriceList } = require("../src/sapB1Queries");
-      const rows = config.mockMode
-        ? mock.fgPriceListRows
-        : await fetchFgPriceList(getClient(), { priceListId: config.fgPriceListId || config.priceListId, fgItemGroupCode: config.fgItemGroupCode });
-      sendXlsx(res, builders.buildFgPriceListWorkbook(rows), "FG Price List.xlsx");
-    } catch (err) {
-      next(err);
-    }
-  });
+  dataRoute(
+    "/price-list.xlsx",
+    "Price List.xlsx",
+    () => builders.buildPriceListWorkbook(mock.priceListRows),
+    async (client, ctx) => builders.buildPriceListWorkbook(await assemble.assemblePriceListRows(client, config, ctx))
+  );
+
+  dataRoute(
+    "/bp-catalogue.xlsx",
+    "BP Catalogue.xlsx",
+    () => builders.buildBpCatalogueWorkbook(mock.bpCatalogueRows),
+    async (client, ctx) => builders.buildBpCatalogueWorkbook(await assemble.assembleBpCatalogueRows(client, config, ctx))
+  );
+
+  dataRoute(
+    "/fg-price-list.xlsx",
+    "FG Price List.xlsx",
+    () => builders.buildFgPriceListWorkbook(mock.fgPriceListRows),
+    async (client, ctx) => builders.buildFgPriceListWorkbook(await assemble.assembleFgPriceListRows(client, config, ctx))
+  );
 
   return router;
 }

@@ -385,18 +385,34 @@
     fgprice: "fg-price-list.xlsx",
   };
 
+  // FGs to fetch: whatever is typed in the SAP card, else the FG codes
+  // already entered in Step 2's Section B (wattage table).
+  function sapB1FgCodes() {
+    const typed = document.getElementById("sapB1FgCodes").value;
+    const codes = typed.trim()
+      ? typed.split(/[\s,;]+/)
+      : Array.from(document.querySelectorAll('#wattTable tbody [data-col="fg"]')).map((el) => el.value);
+    return Array.from(new Set(codes.map((c) => c.trim()).filter(Boolean)));
+  }
+
   sapB1FetchBtn.addEventListener("click", async () => {
     const base = sapB1UrlInput.value.trim().replace(/\/$/, "");
     if (!base) { sapB1Status.textContent = "Enter the backend URL above first."; return; }
     try { localStorage.setItem(SAP_B1_URL_KEY, base); } catch (e) {}
+    const fgCodes = sapB1FgCodes();
+    const query = fgCodes.length ? `?fgs=${encodeURIComponent(fgCodes.join(","))}` : "";
     sapB1FetchBtn.disabled = true;
     const results = [];
     for (const [key, endpoint] of Object.entries(SAP_B1_ENDPOINTS)) {
       const dzFileEl = document.getElementById("dzfile-" + key);
       dzFileEl.textContent = "Fetching from SAP B1…";
       try {
-        const res = await fetch(`${base}/api/${endpoint}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(`${base}/api/${endpoint}${query}`);
+        if (!res.ok) {
+          let msg = `HTTP ${res.status}`;
+          try { const body = await res.json(); if (body.error) msg = body.error; } catch (e) {}
+          throw new Error(msg);
+        }
         const buf = await res.arrayBuffer();
         const wb = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: false });
         uploaded[key] = { file: { name: endpoint, size: buf.byteLength }, wb };
@@ -411,7 +427,7 @@
     }
     sapB1FetchBtn.disabled = false;
     sapB1Status.textContent = results.every(Boolean)
-      ? "All 4 files fetched from SAP B1 — Input Sheet (Step 2) still needs your manual entry."
+      ? `All 4 files fetched from SAP B1${fgCodes.length ? ` for ${fgCodes.join(", ")}` : ""} — Input Sheet (Step 2) still needs your manual entry.`
       : "Some fetches failed — check the backend is running and reachable, then retry.";
   });
 
