@@ -36,23 +36,27 @@ function buildBomDumpWorkbook(trees) {
   return wb;
 }
 
-// Price List shape: ItemCode, GRPORate, LatestGRPODate, PriceListRate, PriceUpdateDate
-// `rows` = [{ itemCode, grpoRate, latestGrpoDate, priceListRate, priceUpdateDate }]
+// Price List shape: ItemCode, ItemDescription, GRPORate, LatestGRPODate, PriceListRate, PriceUpdateDate
+// `rows` = [{ itemCode, itemDescription, grpoRate, latestGrpoDate, priceListRate, priceUpdateDate }]
 function buildPriceListWorkbook(rows) {
-  const header = ["ItemCode", "GRPORate", "LatestGRPODate", "PriceListRate", "PriceUpdateDate"];
+  const header = ["ItemCode", "ItemDescription", "GRPORate", "LatestGRPODate", "PriceListRate", "PriceUpdateDate"];
   const aoa = [header].concat(
-    rows.map((r) => [r.itemCode, r.grpoRate ?? "", r.latestGrpoDate || "", r.priceListRate ?? "", r.priceUpdateDate || ""])
+    rows.map((r) => [
+      r.itemCode, r.itemDescription || "", r.grpoRate ?? "", r.latestGrpoDate || "", r.priceListRate ?? "", r.priceUpdateDate || "",
+    ])
   );
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Price List");
   return wb;
 }
 
-// BP Catalogue shape: Item No., BP Catalog Number, BP Catalog Description, Item Description
-// `rows` = [{ itemNo, bpCatalogNumber, bpCatalogDescription, itemDescription }]
+// BP Catalogue shape: BP Code, BP Catalog Number, BP Catalog Description, Item No., Item Description
+// `rows` = [{ bpCode, itemNo, bpCatalogNumber, bpCatalogDescription, itemDescription }]
 function buildBpCatalogueWorkbook(rows) {
-  const header = ["Item No.", "BP Catalog Number", "BP Catalog Description", "Item Description"];
-  const aoa = [header].concat(rows.map((r) => [r.itemNo, r.bpCatalogNumber, r.bpCatalogDescription, r.itemDescription]));
+  const header = ["BP Code", "BP Catalog Number", "BP Catalog Description", "Item No.", "Item Description"];
+  const aoa = [header].concat(
+    rows.map((r) => [r.bpCode || "", r.bpCatalogNumber, r.bpCatalogDescription, r.itemNo, r.itemDescription])
+  );
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "BP Catalogue");
   return wb;
